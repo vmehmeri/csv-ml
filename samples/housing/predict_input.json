@@ -1,0 +1,12 @@
+{
+    "size": [50],
+    "num_of_rooms": [2],
+    "year_built": [2002],
+    "floor_num": [4],
+    "street_name": ["Kungsgatan"],
+    "sold_year": [2020],
+    "sold_month": ["jan"],
+    "location": ["Stockholm"],
+    "type": ["Lägenhet"],
+    "initial_price": [2795000]
+}
