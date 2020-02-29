@@ -104,6 +104,7 @@ class ModelTrainer:
                     initial_accumulator_value=self.cfg.DNN_CONFIG['Ftrl']['optimizer_initial_accumulator_value'],
                     l1_regularization_strength=self.cfg.DNN_CONFIG['Ftrl']['optimizer_l1_regularization_strength'],
                     l2_regularization_strength=self.cfg.DNN_CONFIG['Ftrl']['optimizer_l2_regularization_strength'],
+                    l2_shrinkage_regularization_strength=self.cfg.DNN_CONFIG['Ftrl']['l2_shrinkage_regularization_strength'],
                 ),
                 activation_fn=tf.nn.relu,
                 feature_columns = self.featcols, 
@@ -117,6 +118,31 @@ class ModelTrainer:
                 hidden_units = self.cfg.DNN_CONFIG['hidden_units'], # specify neural architecture,
                 optimizer=tf.optimizers.Adam(
                     learning_rate=self.cfg.DNN_CONFIG['Adam']['optimizer_learning_rate'],
+                ),
+                model_dir = self.cfg.OUTDIR)
+        elif self.cfg.DNN_CONFIG['optimizer'] == "RMSprop":
+            # Change estimator type
+            self.model = tf.estimator.DNNRegressor(
+                feature_columns= self.featcols,
+                hidden_units = self.cfg.DNN_CONFIG['hidden_units'], # specify neural architecture,
+                optimizer=tf.optimizers.RMSprop(
+                    learning_rate=self.cfg.DNN_CONFIG['RMSprop']['optimizer_learning_rate'], 
+                    rho=self.cfg.DNN_CONFIG['RMSprop']['rho'], 
+                    momentum=self.cfg.DNN_CONFIG['RMSprop']['momentum'], 
+                    epsilon=self.cfg.DNN_CONFIG['RMSprop']['epsilon'], 
+                    centered=self.cfg.DNN_CONFIG['RMSprop']['centered'],
+                    name='RMSprop'
+                ),
+                model_dir = self.cfg.OUTDIR)
+        elif self.cfg.DNN_CONFIG['optimizer'] == "Adagrad":
+            # Change estimator type
+            self.model = tf.estimator.DNNRegressor(
+                feature_columns= self.featcols,
+                hidden_units = self.cfg.DNN_CONFIG['hidden_units'], # specify neural architecture,
+                optimizer=tf.optimizers.RMSprop(
+                    learning_rate=self.cfg.DNN_CONFIG['Adagrad']['optimizer_learning_rate'], 
+                    epsilon=self.cfg.DNN_CONFIG['Adagrad']['epsilon'], 
+                    name='Adagrad'
                 ),
                 model_dir = self.cfg.OUTDIR)
 
