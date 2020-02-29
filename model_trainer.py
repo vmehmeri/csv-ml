@@ -1,6 +1,4 @@
 from tfutils import *
-#from samples.housing.tfconfig import TfConfig as cfg
-#from samples.youtube.tfconfig import TfConfig as cfg
 import tensorflow as tf
 from tensorflow import keras
 import pandas as pd
@@ -12,7 +10,7 @@ import sys
 import os
 import json
 
-tf.get_logger().setLevel('WARN')
+tf.get_logger().setLevel('INFO')
 
 class ModelTrainer:
 
@@ -185,12 +183,3 @@ class ModelTrainer:
             
             print(bcolors.OKGREEN, "\nPredicted Value: ", pred_val, bcolors.ENDC)
             return pred_val
-
-
-
-
-# if __name__ == '__main__':
-#     trainer = ModelTrainer()
-#     trainer.train_dnn(start_fresh = True)
-#     trainer.evaluate_dnn()
-#     trainer.predict(predict_input_fn)
