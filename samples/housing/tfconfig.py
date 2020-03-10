@@ -11,7 +11,7 @@ class TfConfig:
     ## A divider to define dimension of the categorical features in relation to bucket size. 
     ## This allows for dimensionality reduction of the categories. A value of 'n' means a dimension
     ## equals the bucket size divided by 'n'
-    CATEOGRICAL_FEATURE_DIMENSION_DIVIDER = 1
+    CATEGORICAL_FEATURE_DIMENSION_DIVIDER = 1
     ## Categorical features that have bucketized columns. Defined as an array of tuples in the format:
     ## (feature_name, min_value, max_value, step). For example, ("my_feature", 0, 11, 4) will define 
     ## the category buckets [0-3], [4-7], [8-11] - so all values falling in the same bucket are treated
@@ -34,8 +34,9 @@ class TfConfig:
         "final_price": 1/1000000
     }
     BATCH_SIZE = 64
-    DNN_REGRESSOR_NUM_OF_STEPS = 5000
+    NUM_OF_TRAINING_STEPS = 10000
     DNN_CONFIG = {
+        "model": "Regressor",
         "optimizer": "Ftrl",
         "hidden_units": [16,24,8],
         "Ftrl" : {

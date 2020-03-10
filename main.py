@@ -1,6 +1,7 @@
 from model_trainer import ModelTrainer
-from samples.housing.tfconfig import TfConfig as cfg
-#from samples.wine.tfconfig import TfConfig as cfg
+#from samples.titanic.tfconfig import TfConfig as cfg
+from samples.wine.tfconfig import TfConfig as cfg
+import sys
 
 if __name__ == '__main__':
     trainer = ModelTrainer(cfg)

@@ -9,6 +9,7 @@ import shutil
 import sys
 import os
 import json
+import csv
 
 tf.get_logger().setLevel('INFO')
 
@@ -41,7 +42,7 @@ class ModelTrainer:
         for cat_col, cat_hash_bucket_size in self.cfg.CATEGORICAL_FEATURE_COLUMNS:
             self.featcols.append(
                 tf.feature_column.embedding_column(
-                    tf.feature_column.categorical_column_with_hash_bucket(cat_col,cat_hash_bucket_size), dimension=cat_hash_bucket_size//self.cfg.CATEOGRICAL_FEATURE_DIMENSION_DIVIDER
+                    tf.feature_column.categorical_column_with_hash_bucket(cat_col,cat_hash_bucket_size), dimension=cat_hash_bucket_size//self.cfg.CATEGORICAL_FEATURE_DIMENSION_DIVIDER
                     )
             )
             self.feature_names.append(cat_col)
@@ -65,21 +66,29 @@ class ModelTrainer:
     @staticmethod
     def get_rmse(model, df, batch_size, feature_names, label_name, data_transform_dict):
         metrics = model.evaluate(input_fn = lambda: pandas_eval_input_fn(df, batch_size, feature_names, label_name))
-        avg_loss = metrics["average_loss"]**.5
-        label_mean = df[label_name].mean()
+        if (isinstance(model,tf.estimator.DNNClassifier)):
+            return metrics
+        else:
+            avg_loss = metrics["average_loss"]**.5
+            label_mean = df[label_name].mean()
 
-        if label_name in data_transform_dict:
-            #avg_loss = int(denormalize_val(self.cfg.LABEL_NAME,avg_loss))
-            avg_loss = int(avg_loss * 1/data_transform_dict[label_name])
-            label_mean = label_mean * 1/data_transform_dict[label_name]
+            if label_name in data_transform_dict:
+                #avg_loss = int(denormalize_val(self.cfg.LABEL_NAME,avg_loss))
+                avg_loss = int(avg_loss * 1/data_transform_dict[label_name])
+                label_mean = label_mean * 1/data_transform_dict[label_name]
 
-        avg_loss_percentage = round((avg_loss/label_mean)*100,2)
-        return avg_loss, avg_loss_percentage
+            avg_loss_percentage = round((avg_loss/label_mean)*100,2)
+            return avg_loss, avg_loss_percentage
+        
 
     @staticmethod
     def print_rmse(model, df, batch_size, feature_names, label_name, data_transform_dict):
-        avg_loss, avg_loss_percentage = ModelTrainer.get_rmse(model, df, batch_size, feature_names, label_name, data_transform_dict)
-        print(bcolors.BOLD, f"\nRMSE on dataset = {avg_loss} ({avg_loss_percentage}% of average label value)", bcolors.ENDC)
+        if (isinstance(model,tf.estimator.DNNClassifier)):
+            metrics =  ModelTrainer.get_rmse(model, df, batch_size, feature_names, label_name, data_transform_dict)
+            print(metrics)
+        else:
+            avg_loss, avg_loss_percentage = ModelTrainer.get_rmse(model, df, batch_size, feature_names, label_name, data_transform_dict)
+            print(bcolors.BOLD, f"\nRMSE on dataset = {avg_loss} ({avg_loss_percentage}% of average label value)", bcolors.ENDC)
 
 
     #####################################################################################
@@ -94,64 +103,65 @@ class ModelTrainer:
             shutil.rmtree(path = self.cfg.OUTDIR, ignore_errors = True) 
 
         if self.cfg.DNN_CONFIG['optimizer'] == "Ftrl":
-            self.model = tf.estimator.DNNRegressor(
-                hidden_units = self.cfg.DNN_CONFIG['hidden_units'], # specify neural architecture,
-                optimizer=tf.optimizers.Ftrl(
+            _optimizer = tf.optimizers.Ftrl(
                     learning_rate=self.cfg.DNN_CONFIG['Ftrl']['optimizer_learning_rate'],
                     learning_rate_power=self.cfg.DNN_CONFIG['Ftrl']['optimizer_learning_rate_power'],
                     initial_accumulator_value=self.cfg.DNN_CONFIG['Ftrl']['optimizer_initial_accumulator_value'],
                     l1_regularization_strength=self.cfg.DNN_CONFIG['Ftrl']['optimizer_l1_regularization_strength'],
                     l2_regularization_strength=self.cfg.DNN_CONFIG['Ftrl']['optimizer_l2_regularization_strength'],
                     l2_shrinkage_regularization_strength=self.cfg.DNN_CONFIG['Ftrl']['l2_shrinkage_regularization_strength'],
-                ),
-                activation_fn=tf.nn.relu,
-                feature_columns = self.featcols, 
-                model_dir = self.cfg.OUTDIR,
-                config = tf.estimator.RunConfig(tf_random_seed = 1)
-            )
+                )
+            
         elif self.cfg.DNN_CONFIG['optimizer'] == "Adam":
-            # Change estimator type
-            self.model = tf.estimator.DNNRegressor(
-                feature_columns= self.featcols,
-                hidden_units = self.cfg.DNN_CONFIG['hidden_units'], # specify neural architecture,
-                optimizer=tf.optimizers.Adam(
-                    learning_rate=self.cfg.DNN_CONFIG['Adam']['optimizer_learning_rate'],
-                ),
-                model_dir = self.cfg.OUTDIR)
+            _optimizer=tf.optimizers.Adam(
+                learning_rate=self.cfg.DNN_CONFIG['Adam']['optimizer_learning_rate'],
+            )
+            
         elif self.cfg.DNN_CONFIG['optimizer'] == "RMSprop":
-            # Change estimator type
-            self.model = tf.estimator.DNNRegressor(
-                feature_columns= self.featcols,
-                hidden_units = self.cfg.DNN_CONFIG['hidden_units'], # specify neural architecture,
-                optimizer=tf.optimizers.RMSprop(
-                    learning_rate=self.cfg.DNN_CONFIG['RMSprop']['optimizer_learning_rate'], 
-                    rho=self.cfg.DNN_CONFIG['RMSprop']['rho'], 
-                    momentum=self.cfg.DNN_CONFIG['RMSprop']['momentum'], 
-                    epsilon=self.cfg.DNN_CONFIG['RMSprop']['epsilon'], 
-                    centered=self.cfg.DNN_CONFIG['RMSprop']['centered'],
-                    name='RMSprop'
-                ),
-                model_dir = self.cfg.OUTDIR)
+            _optimizer=tf.optimizers.RMSprop(
+                learning_rate=self.cfg.DNN_CONFIG['RMSprop']['optimizer_learning_rate'], 
+                rho=self.cfg.DNN_CONFIG['RMSprop']['rho'], 
+                momentum=self.cfg.DNN_CONFIG['RMSprop']['momentum'], 
+                epsilon=self.cfg.DNN_CONFIG['RMSprop']['epsilon'], 
+                centered=self.cfg.DNN_CONFIG['RMSprop']['centered'],
+                name='RMSprop'
+            )
         elif self.cfg.DNN_CONFIG['optimizer'] == "Adagrad":
-            # Change estimator type
-            self.model = tf.estimator.DNNRegressor(
-                feature_columns= self.featcols,
-                hidden_units = self.cfg.DNN_CONFIG['hidden_units'], # specify neural architecture,
-                optimizer=tf.optimizers.RMSprop(
-                    learning_rate=self.cfg.DNN_CONFIG['Adagrad']['optimizer_learning_rate'], 
-                    epsilon=self.cfg.DNN_CONFIG['Adagrad']['epsilon'], 
-                    name='Adagrad'
-                ),
-                model_dir = self.cfg.OUTDIR)
+            _optimizer=tf.optimizers.RMSprop(
+                learning_rate=self.cfg.DNN_CONFIG['Adagrad']['optimizer_learning_rate'], 
+                epsilon=self.cfg.DNN_CONFIG['Adagrad']['epsilon'], 
+                name='Adagrad'
+            )
 
         else:
             raise "Unsupported optimizer"
+
+        if self.cfg.DNN_CONFIG['model'] == "Classifier":
+            self.model = tf.estimator.DNNClassifier(
+                    hidden_units = self.cfg.DNN_CONFIG['hidden_units'], # specify neural architecture,
+                    feature_columns = self.featcols, 
+                    model_dir = self.cfg.OUTDIR,
+                    n_classes = self.cfg.DNN_CONFIG['num_of_classes'],
+                    optimizer = _optimizer,
+                    activation_fn = tf.nn.relu,
+                    dropout = None,
+                    config = tf.estimator.RunConfig(tf_random_seed = 1)
+                )
+        else:
+            self.model = tf.estimator.DNNRegressor(
+                    hidden_units = self.cfg.DNN_CONFIG['hidden_units'], # specify neural architecture,
+                    optimizer=_optimizer,
+                    activation_fn=tf.nn.relu,
+                    feature_columns = self.featcols, 
+                    model_dir = self.cfg.OUTDIR,
+                    config = tf.estimator.RunConfig(tf_random_seed = 1)
+                )
 
         ## Train
         print("\n==================== TRAINING DNN REGRESSOR ========================\n")
         self.model.train(
             input_fn = lambda: pandas_train_input_fn(self.df, self.cfg.BATCH_SIZE, self.feature_names, self.label_name), 
-            max_steps = self.cfg.DNN_REGRESSOR_NUM_OF_STEPS)
+            max_steps = self.cfg.NUM_OF_TRAINING_STEPS)
 
         
 
@@ -160,26 +170,59 @@ class ModelTrainer:
         print("\n==================== EVALUATING DNN REGRESSOR ========================\n")
         ModelTrainer.print_rmse(self.model, self.df_eval, self.cfg.BATCH_SIZE, self.feature_names, self.label_name, self.cfg.TRANSFORM_DATA) 
 
-    def _predict_input_fn(self):
-        with open(self.cfg.PREDICT_INPUT_FILE) as input_json:
-            features = json.load(input_json)
+    def _get_dataset(self, file_path, **kwargs):
+        dataset = tf.data.experimental.make_csv_dataset(
+            file_path,
+            batch_size=64, 
+            label_name=None,
+            na_value="?",
+            num_epochs=1,
+            ignore_errors=True, 
+            **kwargs)
+        return dataset
 
-        ModelTrainer.transform_input_feature(features, self.cfg.TRANSFORM_DATA)
+    def _predict_input_fn(self):
+        input_file_is_json = True if ".json" in self.cfg.PREDICT_INPUT_FILE else False
+        if input_file_is_json:
+            with open(self.cfg.PREDICT_INPUT_FILE) as input_json:
+                features = json.load(input_json)
+
+            ModelTrainer.transform_input_feature(features, self.cfg.TRANSFORM_DATA)
+
+        else:
+            features = self._get_dataset(self.cfg.PREDICT_INPUT_FILE)
+            
+        
         
         return features
 
     def predict(self):
         ## Predict
         predictions = self.model.predict(self._predict_input_fn)
+        pred_vals = []
+        count = 0
+        while True:
+            try:
+                if isinstance(self.model,tf.estimator.DNNClassifier):
+                    pred_val = next(predictions)['class_ids'][0]
+                else:
+                    pred_val = next(predictions)['predictions']
+                    num_of_predictions = pred_val.size
+                    if count >= num_of_predictions:
+                        break
+                    count+=1
+                    if self.cfg.LABEL_NAME in self.cfg.TRANSFORM_DATA:
+                        transformed_predicted_value = pred_val[0]
+                        pred_val = int(transformed_predicted_value/self.cfg.TRANSFORM_DATA[self.cfg.LABEL_NAME])
+                    else:
+                        pred_val = pred_val[0]
+                
+                if pred_val is None:
+                    return None
+                
+                pred_vals.append(pred_val)
+            except:
+                break
 
-        #print("DNN Predictions:")
-        num_of_predictions = len(list(self._predict_input_fn().values())[0])
-        for _ in range(num_of_predictions):
-            if self.cfg.LABEL_NAME in self.cfg.TRANSFORM_DATA:
-                transformed_predicted_value = next(predictions)['predictions'][0]
-                pred_val = int(transformed_predicted_value/self.cfg.TRANSFORM_DATA[self.cfg.LABEL_NAME])
-            else:
-                pred_val = next(predictions)['predictions'][0]
-            
-            print(bcolors.OKGREEN, "\nPredicted Value: ", pred_val, bcolors.ENDC)
-            return pred_val
+        print(bcolors.OKGREEN, "\n%d Predicted Value(s): " % len(pred_vals), pred_vals, bcolors.ENDC)
+        return pred_vals
